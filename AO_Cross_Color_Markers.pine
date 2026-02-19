@@ -1,0 +1,38 @@
+// This Pine Script™ code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © ao-cross-color-marker-tv
+
+//@version=6
+indicator("AO Cross & Color Markers", overlay = true)
+
+// --- Inputs ---
+showZeroCross  = input.bool(true, "Show Zero Cross (0)")
+showColorChange = input.bool(true, "Show Color Change (C)")
+markerColor    = input.color(color.orange, "Marker Color")
+markerSize     = input.string("small", "Marker Size", options = ["tiny", "small", "normal", "large", "huge"])
+
+sizeMap = switch markerSize
+    "tiny"   => size.tiny
+    "small"  => size.small
+    "normal" => size.normal
+    "large"  => size.large
+    "huge"   => size.huge
+
+// --- AO Calculation ---
+ao = ta.sma(hl2, 5) - ta.sma(hl2, 34)
+
+// --- Zero Cross Signal ---
+// AO crossed zero between bar [2] and bar [1] (last closed bar)
+zeroCross = (ao[1] > 0 and ao[2] <= 0) or (ao[1] < 0 and ao[2] >= 0)
+
+// --- Color Change Signal ---
+// AO bar color: green when rising (ao > prev ao), red when falling
+colorNow  = ao[1] > ao[2] ? 1 : ao[1] < ao[2] ? -1 : 0
+colorPrev = ao[2] > ao[3] ? 1 : ao[2] < ao[3] ? -1 : 0
+colorChange = colorNow != colorPrev and colorNow != 0 and colorPrev != 0
+
+// --- Draw Markers ---
+plotchar(showZeroCross and zeroCross, char = '0', location = location.belowbar,
+     color = markerColor, size = sizeMap, title = "Zero Cross", offset = -1)
+
+plotchar(showColorChange and colorChange, char = 'C', location = location.belowbar,
+     color = markerColor, size = sizeMap, title = "Color Change", offset = -1)
