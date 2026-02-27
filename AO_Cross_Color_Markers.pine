@@ -7,6 +7,7 @@ indicator("AO Cross & Color Markers", overlay = false, max_lines_count = 500)
 // --- Inputs ---
 showZeroCross  = input.bool(true, "Show Zero Cross (0)")
 showColorChange = input.bool(true, "Show Color Change (C)")
+showSingleBar  = input.bool(true, "Show Single Bar Pattern")
 markerColor    = input.color(color.orange, "Marker Color")
 
 // size parameter of plotchar() requires a compile-time constant,
@@ -18,6 +19,7 @@ useHuge   = input.bool(false, "Size: Huge")
 
 aoAvgLen        = input.int(100, "AO Average Lookback", minval = 10)
 aoDisplayAvgLen = input.int(1000, "AO Display Average Lookback", minval = 10)
+aoWmaLen        = input.int(14, "AO WMA Length", minval = 1)
 
 showVLines   = input.bool(true, "Show Vertical Lines (C+21, C+34)")
 vlineBullColor = input.color(color.green, "VLine Bull Color (cross up)")
@@ -31,9 +33,11 @@ lineStyle = switch vlineStyleIn
 
 // --- AO Calculation ---
 ao = ta.sma(hl2, 5) - ta.sma(hl2, 34)
+aoWma = ta.wma(ao, aoWmaLen)
 
 // --- AO Histogram ---
 plot(ao, "AO", style = plot.style_histogram, color = ao > ao[1] ? color.green : color.red)
+plot(aoWma, "AO WMA", color = color.blue)
 hline(0, "Zero", color = color.gray)
 
 // --- AO Display Averages (positive / negative over aoDisplayAvgLen bars) ---
@@ -83,9 +87,12 @@ avgNeg = cntNeg > 0 ? sumNeg / cntNeg : na
 
 // --- Color Change Signal ---
 // AO bar color: green when rising (ao > prev ao), red when falling
-colorNow  = ao[1] > ao[2] ? 1 : ao[1] < ao[2] ? -1 : 0
-colorPrev = ao[2] > ao[3] ? 1 : ao[2] < ao[3] ? -1 : 0
+colorNow      = ao[1] > ao[2] ? 1 : ao[1] < ao[2] ? -1 : 0
+colorPrev     = ao[2] > ao[3] ? 1 : ao[2] < ao[3] ? -1 : 0
+colorPrevPrev = ao[3] > ao[4] ? 1 : ao[3] < ao[4] ? -1 : 0
 colorChangeRaw = colorNow != colorPrev and colorNow != 0 and colorPrev != 0
+
+singleBar = colorPrevPrev != 0 and colorPrev != 0 and colorNow != 0 and colorPrev != colorPrevPrev and colorPrev != colorNow and colorPrevPrev == colorNow
 
 aoAtC   = ao[1]
 strongC = false
@@ -113,6 +120,17 @@ plotchar(not useTiny and not useNormal and not useLarge and not useHuge and show
 plotchar(useNormal and showColor,                                        char = 'C', location = location.belowbar, color = markerColor, size = size.normal, title = "Color Change (normal)", offset = -1, force_overlay = true)
 plotchar(useLarge and showColor,                                         char = 'C', location = location.belowbar, color = markerColor, size = size.large,  title = "Color Change (large)",  offset = -1, force_overlay = true)
 plotchar(useHuge and showColor,                                          char = 'C', location = location.belowbar, color = markerColor, size = size.huge,   title = "Color Change (huge)",   offset = -1, force_overlay = true)
+
+// --- Single Bar Pattern Arrows (on AO pane) ---
+aoArrowOffset = ta.highest(math.abs(ao), 100) * 0.20
+plotshape(showSingleBar and singleBar and ao[2] > 0 ? ao[2] + aoArrowOffset : na,
+          style = shape.triangledown, location = location.absolute,
+          color = color.red, size = size.tiny, offset = -2,
+          title = "Single Bar Down")
+plotshape(showSingleBar and singleBar and ao[2] < 0 ? ao[2] - aoArrowOffset : na,
+          style = shape.triangleup, location = location.absolute,
+          color = color.green, size = size.tiny, offset = -2,
+          title = "Single Bar Up")
 
 // --- Vertical Lines: C+21 / C+34 ---
 var int   lastCBar      = na
@@ -186,3 +204,54 @@ if not inZone
                 preZoneProtected := false
     else if colorChange
         cPending := false
+
+// --- Alerts: Saucer by Bill Williams ---
+saucerBuy  = ao[1] > 0 and ao[2] > 0 and colorPrev == -1 and colorNow == 1
+saucerSell = ao[1] < 0 and ao[2] < 0 and colorPrev == 1 and colorNow == -1
+
+alertcondition(saucerBuy,  title = "AO Saucer Buy",  message = "AO Saucer BUY: reversal above zero")
+alertcondition(saucerSell, title = "AO Saucer Sell", message = "AO Saucer SELL: reversal below zero")
+
+// --- Alerts: AO crosses WMA ---
+wmaCrossUp   = ao[1] > aoWma[1] and ao[2] <= aoWma[2]
+wmaCrossDown = ao[1] < aoWma[1] and ao[2] >= aoWma[2]
+
+alertcondition(wmaCrossUp,   title = "AO crosses WMA Up",   message = "AO crossed ABOVE WMA")
+alertcondition(wmaCrossDown, title = "AO crosses WMA Down", message = "AO crossed BELOW WMA")
+
+// --- Alerts: AO peak exceeded previous peak (no spam) ---
+var float prevPeakPos    = na
+var float currPeakPos    = 0.0
+var bool  peakAlertedPos = false
+var float prevPeakNeg    = na
+var float currPeakNeg    = 0.0
+var bool  peakAlertedNeg = false
+
+if ao[1] > 0
+    currPeakPos := math.max(currPeakPos, ao[1])
+if ao[1] < 0
+    currPeakNeg := math.min(currPeakNeg, ao[1])
+
+if zeroCrossUp
+    prevPeakNeg    := currPeakNeg
+    currPeakNeg    := 0.0
+    peakAlertedNeg := false
+    currPeakPos    := 0.0
+    peakAlertedPos := false
+if zeroCrossDown
+    prevPeakPos    := currPeakPos
+    currPeakPos    := 0.0
+    peakAlertedPos := false
+    currPeakNeg    := 0.0
+    peakAlertedNeg := false
+
+newHigherPeak = ao[1] > 0 and not na(prevPeakPos) and currPeakPos > prevPeakPos and not peakAlertedPos
+newLowerPeak  = ao[1] < 0 and not na(prevPeakNeg) and currPeakNeg < prevPeakNeg and not peakAlertedNeg
+
+if newHigherPeak
+    peakAlertedPos := true
+if newLowerPeak
+    peakAlertedNeg := true
+
+alertcondition(newHigherPeak, title = "AO Higher Peak", message = "AO positive peak exceeded previous peak")
+alertcondition(newLowerPeak,  title = "AO Lower Peak",  message = "AO negative peak exceeded previous peak")
