@@ -43,9 +43,11 @@ lineStyle = switch vlineStyleIn
 // --- AO Calculation ---
 ao = ta.sma(hl2, 5) - ta.sma(hl2, 34)
 aoWma = ta.wma(ao, aoWmaLen)
+ac = ao - ta.sma(ao, 5)
 
-// --- AO Histogram ---
-plot(ao, "AO", style = plot.style_histogram, color = ao > ao[1] ? color.green : color.red)
+// --- AO & AC Histogram ---
+plot(ao, "AO", style = plot.style_histogram, color = ao > ao[1] ? color.green : color.red, linewidth = 4)
+plot(ac, "AC", style = plot.style_histogram, color = ac > ac[1] ? color.lime : color.maroon, linewidth = 2)
 plot(aoWma, "AO WMA", color = color.blue)
 hline(0, "Zero", color = color.gray)
 
