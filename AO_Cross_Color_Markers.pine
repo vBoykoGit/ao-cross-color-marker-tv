@@ -26,6 +26,15 @@ vlineBullColor = input.color(color.green, "VLine Bull Color (cross up)")
 vlineBearColor = input.color(color.red, "VLine Bear Color (cross down)")
 vlineStyleIn = input.string("dashed", "VLine Style", options = ["solid", "dashed", "dotted"])
 
+tf1Enable = input.bool(false, "TF1 Enable", group = "Multi-TF Alerts")
+tf1       = input.timeframe("60", "TF1 Timeframe", group = "Multi-TF Alerts")
+tf2Enable = input.bool(false, "TF2 Enable", group = "Multi-TF Alerts")
+tf2       = input.timeframe("240", "TF2 Timeframe", group = "Multi-TF Alerts")
+tf3Enable = input.bool(false, "TF3 Enable", group = "Multi-TF Alerts")
+tf3       = input.timeframe("D", "TF3 Timeframe", group = "Multi-TF Alerts")
+tf4Enable = input.bool(false, "TF4 Enable", group = "Multi-TF Alerts")
+tf4       = input.timeframe("W", "TF4 Timeframe", group = "Multi-TF Alerts")
+
 lineStyle = switch vlineStyleIn
     "solid"  => line.style_solid
     "dashed" => line.style_dashed
@@ -205,21 +214,70 @@ if not inZone
     else if colorChange
         cPending := false
 
-// --- Alerts: Saucer by Bill Williams ---
+// --- MTF Alert Signal Function ---
+calcAlertSignals(wmaLen) =>
+    _ao    = ta.sma(hl2, 5) - ta.sma(hl2, 34)
+    _aoWma = ta.wma(_ao, wmaLen)
+
+    _zeroCrossUp   = _ao[1] > 0 and _ao[2] <= 0
+    _zeroCrossDown = _ao[1] < 0 and _ao[2] >= 0
+
+    _colorNow      = _ao[1] > _ao[2] ? 1 : _ao[1] < _ao[2] ? -1 : 0
+    _colorPrev     = _ao[2] > _ao[3] ? 1 : _ao[2] < _ao[3] ? -1 : 0
+    _colorPrevPrev = _ao[3] > _ao[4] ? 1 : _ao[3] < _ao[4] ? -1 : 0
+
+    _singleBar = _colorPrevPrev != 0 and _colorPrev != 0 and _colorNow != 0 and _colorPrev != _colorPrevPrev and _colorPrev != _colorNow and _colorPrevPrev == _colorNow
+    _singleBarDown = _singleBar and _ao[2] > 0
+    _singleBarUp   = _singleBar and _ao[2] < 0
+
+    _saucerBuy  = _ao[1] > 0 and _ao[2] > 0 and _colorPrev == -1 and _colorNow == 1
+    _saucerSell = _ao[1] < 0 and _ao[2] < 0 and _colorPrev == 1  and _colorNow == -1
+
+    _wmaCrossUp   = _ao[1] > _aoWma[1] and _ao[2] <= _aoWma[2]
+    _wmaCrossDown = _ao[1] < _aoWma[1] and _ao[2] >= _aoWma[2]
+
+    var float _prevPeakPos    = na
+    var float _currPeakPos    = 0.0
+    var bool  _peakAlertedPos = false
+    var float _prevPeakNeg    = na
+    var float _currPeakNeg    = 0.0
+    var bool  _peakAlertedNeg = false
+
+    if _ao[1] > 0
+        _currPeakPos := math.max(_currPeakPos, _ao[1])
+    if _ao[1] < 0
+        _currPeakNeg := math.min(_currPeakNeg, _ao[1])
+
+    if _zeroCrossUp
+        _prevPeakNeg    := _currPeakNeg
+        _currPeakNeg    := 0.0
+        _peakAlertedNeg := false
+        _currPeakPos    := 0.0
+        _peakAlertedPos := false
+    if _zeroCrossDown
+        _prevPeakPos    := _currPeakPos
+        _currPeakPos    := 0.0
+        _peakAlertedPos := false
+        _currPeakNeg    := 0.0
+        _peakAlertedNeg := false
+
+    _newHigherPeak = _ao[1] > 0 and not na(_prevPeakPos) and _currPeakPos > _prevPeakPos and not _peakAlertedPos
+    _newLowerPeak  = _ao[1] < 0 and not na(_prevPeakNeg) and _currPeakNeg < _prevPeakNeg and not _peakAlertedNeg
+
+    if _newHigherPeak
+        _peakAlertedPos := true
+    if _newLowerPeak
+        _peakAlertedNeg := true
+
+    [_saucerBuy, _saucerSell, _wmaCrossUp, _wmaCrossDown, _newHigherPeak, _newLowerPeak, _singleBarDown, _singleBarUp]
+
+// --- Current TF Alerts ---
 saucerBuy  = ao[1] > 0 and ao[2] > 0 and colorPrev == -1 and colorNow == 1
 saucerSell = ao[1] < 0 and ao[2] < 0 and colorPrev == 1 and colorNow == -1
 
-alertcondition(saucerBuy,  title = "AO Saucer Buy",  message = "AO Saucer BUY: reversal above zero")
-alertcondition(saucerSell, title = "AO Saucer Sell", message = "AO Saucer SELL: reversal below zero")
-
-// --- Alerts: AO crosses WMA ---
 wmaCrossUp   = ao[1] > aoWma[1] and ao[2] <= aoWma[2]
 wmaCrossDown = ao[1] < aoWma[1] and ao[2] >= aoWma[2]
 
-alertcondition(wmaCrossUp,   title = "AO crosses WMA Up",   message = "AO crossed ABOVE WMA")
-alertcondition(wmaCrossDown, title = "AO crosses WMA Down", message = "AO crossed BELOW WMA")
-
-// --- Alerts: AO peak exceeded previous peak (no spam) ---
 var float prevPeakPos    = na
 var float currPeakPos    = 0.0
 var bool  peakAlertedPos = false
@@ -253,5 +311,120 @@ if newHigherPeak
 if newLowerPeak
     peakAlertedNeg := true
 
-alertcondition(newHigherPeak, title = "AO Higher Peak", message = "AO positive peak exceeded previous peak")
-alertcondition(newLowerPeak,  title = "AO Lower Peak",  message = "AO negative peak exceeded previous peak")
+singleBarDown = singleBar and ao[2] > 0
+singleBarUp   = singleBar and ao[2] < 0
+
+// --- Fetch MTF Signals ---
+[tf1SB, tf1SS, tf1WCU, tf1WCD, tf1HP, tf1LP, tf1SBD, tf1SBU] = request.security(syminfo.tickerid, tf1, calcAlertSignals(aoWmaLen))
+[tf2SB, tf2SS, tf2WCU, tf2WCD, tf2HP, tf2LP, tf2SBD, tf2SBU] = request.security(syminfo.tickerid, tf2, calcAlertSignals(aoWmaLen))
+[tf3SB, tf3SS, tf3WCU, tf3WCD, tf3HP, tf3LP, tf3SBD, tf3SBU] = request.security(syminfo.tickerid, tf3, calcAlertSignals(aoWmaLen))
+[tf4SB, tf4SS, tf4WCU, tf4WCD, tf4HP, tf4LP, tf4SBD, tf4SBU] = request.security(syminfo.tickerid, tf4, calcAlertSignals(aoWmaLen))
+
+// --- Combined Multi-TF alertcondition() ---
+anySaucerBuy  = saucerBuy  or (tf1Enable and tf1SB)  or (tf2Enable and tf2SB)  or (tf3Enable and tf3SB)  or (tf4Enable and tf4SB)
+anySaucerSell = saucerSell or (tf1Enable and tf1SS)  or (tf2Enable and tf2SS)  or (tf3Enable and tf3SS)  or (tf4Enable and tf4SS)
+anyWmaCrossUp   = wmaCrossUp   or (tf1Enable and tf1WCU) or (tf2Enable and tf2WCU) or (tf3Enable and tf3WCU) or (tf4Enable and tf4WCU)
+anyWmaCrossDown = wmaCrossDown or (tf1Enable and tf1WCD) or (tf2Enable and tf2WCD) or (tf3Enable and tf3WCD) or (tf4Enable and tf4WCD)
+anyHigherPeak = newHigherPeak or (tf1Enable and tf1HP) or (tf2Enable and tf2HP) or (tf3Enable and tf3HP) or (tf4Enable and tf4HP)
+anyLowerPeak  = newLowerPeak  or (tf1Enable and tf1LP) or (tf2Enable and tf2LP) or (tf3Enable and tf3LP) or (tf4Enable and tf4LP)
+
+alertcondition(anySaucerBuy,    title = "AO Saucer Buy (Multi-TF)",    message = "AO Saucer BUY on one or more timeframes")
+alertcondition(anySaucerSell,   title = "AO Saucer Sell (Multi-TF)",   message = "AO Saucer SELL on one or more timeframes")
+alertcondition(anyWmaCrossUp,   title = "AO WMA Cross Up (Multi-TF)",  message = "AO crossed ABOVE WMA on one or more timeframes")
+alertcondition(anyWmaCrossDown, title = "AO WMA Cross Down (Multi-TF)", message = "AO crossed BELOW WMA on one or more timeframes")
+alertcondition(anyHigherPeak,   title = "AO Higher Peak (Multi-TF)",   message = "AO higher peak on one or more timeframes")
+alertcondition(anyLowerPeak,    title = "AO Lower Peak (Multi-TF)",    message = "AO lower peak on one or more timeframes")
+
+anySingleBarDown = singleBarDown or (tf1Enable and tf1SBD) or (tf2Enable and tf2SBD) or (tf3Enable and tf3SBD) or (tf4Enable and tf4SBD)
+anySingleBarUp   = singleBarUp  or (tf1Enable and tf1SBU) or (tf2Enable and tf2SBU) or (tf3Enable and tf3SBU) or (tf4Enable and tf4SBU)
+
+alertcondition(anySingleBarDown, title = "AO Single Bar Down (Multi-TF)", message = "AO single bar bearish pattern on one or more timeframes")
+alertcondition(anySingleBarUp,   title = "AO Single Bar Up (Multi-TF)",   message = "AO single bar bullish pattern on one or more timeframes")
+
+// --- Per-TF alert() with dynamic messages ---
+chartTf = timeframe.period
+
+if saucerBuy
+    alert("AO Saucer BUY on " + chartTf, alert.freq_once_per_bar_close)
+if saucerSell
+    alert("AO Saucer SELL on " + chartTf, alert.freq_once_per_bar_close)
+if wmaCrossUp
+    alert("AO crossed ABOVE WMA on " + chartTf, alert.freq_once_per_bar_close)
+if wmaCrossDown
+    alert("AO crossed BELOW WMA on " + chartTf, alert.freq_once_per_bar_close)
+if newHigherPeak
+    alert("AO higher peak on " + chartTf, alert.freq_once_per_bar_close)
+if newLowerPeak
+    alert("AO lower peak on " + chartTf, alert.freq_once_per_bar_close)
+if singleBarDown
+    alert("AO single bar DOWN on " + chartTf, alert.freq_once_per_bar_close)
+if singleBarUp
+    alert("AO single bar UP on " + chartTf, alert.freq_once_per_bar_close)
+
+if tf1Enable and tf1SB
+    alert("AO Saucer BUY on " + tf1, alert.freq_once_per_bar_close)
+if tf1Enable and tf1SS
+    alert("AO Saucer SELL on " + tf1, alert.freq_once_per_bar_close)
+if tf1Enable and tf1WCU
+    alert("AO crossed ABOVE WMA on " + tf1, alert.freq_once_per_bar_close)
+if tf1Enable and tf1WCD
+    alert("AO crossed BELOW WMA on " + tf1, alert.freq_once_per_bar_close)
+if tf1Enable and tf1HP
+    alert("AO higher peak on " + tf1, alert.freq_once_per_bar_close)
+if tf1Enable and tf1LP
+    alert("AO lower peak on " + tf1, alert.freq_once_per_bar_close)
+if tf1Enable and tf1SBD
+    alert("AO single bar DOWN on " + tf1, alert.freq_once_per_bar_close)
+if tf1Enable and tf1SBU
+    alert("AO single bar UP on " + tf1, alert.freq_once_per_bar_close)
+
+if tf2Enable and tf2SB
+    alert("AO Saucer BUY on " + tf2, alert.freq_once_per_bar_close)
+if tf2Enable and tf2SS
+    alert("AO Saucer SELL on " + tf2, alert.freq_once_per_bar_close)
+if tf2Enable and tf2WCU
+    alert("AO crossed ABOVE WMA on " + tf2, alert.freq_once_per_bar_close)
+if tf2Enable and tf2WCD
+    alert("AO crossed BELOW WMA on " + tf2, alert.freq_once_per_bar_close)
+if tf2Enable and tf2HP
+    alert("AO higher peak on " + tf2, alert.freq_once_per_bar_close)
+if tf2Enable and tf2LP
+    alert("AO lower peak on " + tf2, alert.freq_once_per_bar_close)
+if tf2Enable and tf2SBD
+    alert("AO single bar DOWN on " + tf2, alert.freq_once_per_bar_close)
+if tf2Enable and tf2SBU
+    alert("AO single bar UP on " + tf2, alert.freq_once_per_bar_close)
+
+if tf3Enable and tf3SB
+    alert("AO Saucer BUY on " + tf3, alert.freq_once_per_bar_close)
+if tf3Enable and tf3SS
+    alert("AO Saucer SELL on " + tf3, alert.freq_once_per_bar_close)
+if tf3Enable and tf3WCU
+    alert("AO crossed ABOVE WMA on " + tf3, alert.freq_once_per_bar_close)
+if tf3Enable and tf3WCD
+    alert("AO crossed BELOW WMA on " + tf3, alert.freq_once_per_bar_close)
+if tf3Enable and tf3HP
+    alert("AO higher peak on " + tf3, alert.freq_once_per_bar_close)
+if tf3Enable and tf3LP
+    alert("AO lower peak on " + tf3, alert.freq_once_per_bar_close)
+if tf3Enable and tf3SBD
+    alert("AO single bar DOWN on " + tf3, alert.freq_once_per_bar_close)
+if tf3Enable and tf3SBU
+    alert("AO single bar UP on " + tf3, alert.freq_once_per_bar_close)
+
+if tf4Enable and tf4SB
+    alert("AO Saucer BUY on " + tf4, alert.freq_once_per_bar_close)
+if tf4Enable and tf4SS
+    alert("AO Saucer SELL on " + tf4, alert.freq_once_per_bar_close)
+if tf4Enable and tf4WCU
+    alert("AO crossed ABOVE WMA on " + tf4, alert.freq_once_per_bar_close)
+if tf4Enable and tf4WCD
+    alert("AO crossed BELOW WMA on " + tf4, alert.freq_once_per_bar_close)
+if tf4Enable and tf4HP
+    alert("AO higher peak on " + tf4, alert.freq_once_per_bar_close)
+if tf4Enable and tf4LP
+    alert("AO lower peak on " + tf4, alert.freq_once_per_bar_close)
+if tf4Enable and tf4SBD
+    alert("AO single bar DOWN on " + tf4, alert.freq_once_per_bar_close)
+if tf4Enable and tf4SBU
+    alert("AO single bar UP on " + tf4, alert.freq_once_per_bar_close)
