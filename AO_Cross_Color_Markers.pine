@@ -2,7 +2,7 @@
 // © ao-cross-color-marker-tv
 
 //@version=6
-indicator("AO Cross & Color Markers", overlay = true, max_lines_count = 500)
+indicator("AO Cross & Color Markers", overlay = false, max_lines_count = 500)
 
 // --- Inputs ---
 showZeroCross  = input.bool(true, "Show Zero Cross (0)")
@@ -16,11 +16,12 @@ useNormal = input.bool(false, "Size: Normal")
 useLarge  = input.bool(false, "Size: Large")
 useHuge   = input.bool(false, "Size: Huge")
 
-aoAvgLen     = input.int(100, "AO Average Lookback", minval = 10)
+aoAvgLen        = input.int(100, "AO Average Lookback", minval = 10)
+aoDisplayAvgLen = input.int(1000, "AO Display Average Lookback", minval = 10)
 
 showVLines   = input.bool(true, "Show Vertical Lines (C+21, C+34)")
-vline21Color = input.color(color.aqua, "VLine 21 Color")
-vline34Color = input.color(color.fuchsia, "VLine 34 Color")
+vlineBullColor = input.color(color.green, "VLine Bull Color (cross up)")
+vlineBearColor = input.color(color.red, "VLine Bear Color (cross down)")
 vlineStyleIn = input.string("dashed", "VLine Style", options = ["solid", "dashed", "dotted"])
 
 lineStyle = switch vlineStyleIn
@@ -31,9 +32,36 @@ lineStyle = switch vlineStyleIn
 // --- AO Calculation ---
 ao = ta.sma(hl2, 5) - ta.sma(hl2, 34)
 
+// --- AO Histogram ---
+plot(ao, "AO", style = plot.style_histogram, color = ao > ao[1] ? color.green : color.red)
+hline(0, "Zero", color = color.gray)
+
+// --- AO Display Averages (positive / negative over aoDisplayAvgLen bars) ---
+sumDispPos = 0.0
+cntDispPos = 0
+sumDispNeg = 0.0
+cntDispNeg = 0
+for i = 0 to aoDisplayAvgLen - 1
+    val = ao[i]
+    if not na(val)
+        if val > 0
+            sumDispPos += val
+            cntDispPos += 1
+        else if val < 0
+            sumDispNeg += val
+            cntDispNeg += 1
+
+avgDispPos = cntDispPos > 0 ? sumDispPos / cntDispPos : na
+avgDispNeg = cntDispNeg > 0 ? sumDispNeg / cntDispNeg : na
+
+plot(avgDispPos, "Avg Positive AO", color = color.green, linewidth = 1)
+plot(avgDispNeg, "Avg Negative AO", color = color.red, linewidth = 1)
+
 // --- Zero Cross Signal ---
 // AO crossed zero between bar [2] and bar [1] (last closed bar)
-zeroCross = (ao[1] > 0 and ao[2] <= 0) or (ao[1] < 0 and ao[2] >= 0)
+zeroCrossUp   = ao[1] > 0 and ao[2] <= 0
+zeroCrossDown = ao[1] < 0 and ao[2] >= 0
+zeroCross     = zeroCrossUp or zeroCrossDown
 
 // --- AO Average (separate for positive / negative) ---
 sumPos = 0.0
@@ -74,24 +102,28 @@ colorChange = colorChangeRaw and strongC
 showZero  = showZeroCross and zeroCross
 showColor = showColorChange and colorChange
 
-plotchar(useTiny and showZero,                                          char = '0', location = location.belowbar, color = markerColor, size = size.tiny,   title = "Zero Cross (tiny)",   offset = -1)
-plotchar(not useTiny and not useNormal and not useLarge and not useHuge and showZero, char = '0', location = location.belowbar, color = markerColor, size = size.small,  title = "Zero Cross (small)",  offset = -1)
-plotchar(useNormal and showZero,                                        char = '0', location = location.belowbar, color = markerColor, size = size.normal, title = "Zero Cross (normal)", offset = -1)
-plotchar(useLarge and showZero,                                         char = '0', location = location.belowbar, color = markerColor, size = size.large,  title = "Zero Cross (large)",  offset = -1)
-plotchar(useHuge and showZero,                                          char = '0', location = location.belowbar, color = markerColor, size = size.huge,   title = "Zero Cross (huge)",   offset = -1)
+plotchar(useTiny and showZero,                                          char = '0', location = location.belowbar, color = markerColor, size = size.tiny,   title = "Zero Cross (tiny)",   offset = -1, force_overlay = true)
+plotchar(not useTiny and not useNormal and not useLarge and not useHuge and showZero, char = '0', location = location.belowbar, color = markerColor, size = size.small,  title = "Zero Cross (small)",  offset = -1, force_overlay = true)
+plotchar(useNormal and showZero,                                        char = '0', location = location.belowbar, color = markerColor, size = size.normal, title = "Zero Cross (normal)", offset = -1, force_overlay = true)
+plotchar(useLarge and showZero,                                         char = '0', location = location.belowbar, color = markerColor, size = size.large,  title = "Zero Cross (large)",  offset = -1, force_overlay = true)
+plotchar(useHuge and showZero,                                          char = '0', location = location.belowbar, color = markerColor, size = size.huge,   title = "Zero Cross (huge)",   offset = -1, force_overlay = true)
 
-plotchar(useTiny and showColor,                                          char = 'C', location = location.belowbar, color = markerColor, size = size.tiny,   title = "Color Change (tiny)",   offset = -1)
-plotchar(not useTiny and not useNormal and not useLarge and not useHuge and showColor, char = 'C', location = location.belowbar, color = markerColor, size = size.small,  title = "Color Change (small)",  offset = -1)
-plotchar(useNormal and showColor,                                        char = 'C', location = location.belowbar, color = markerColor, size = size.normal, title = "Color Change (normal)", offset = -1)
-plotchar(useLarge and showColor,                                         char = 'C', location = location.belowbar, color = markerColor, size = size.large,  title = "Color Change (large)",  offset = -1)
-plotchar(useHuge and showColor,                                          char = 'C', location = location.belowbar, color = markerColor, size = size.huge,   title = "Color Change (huge)",   offset = -1)
+plotchar(useTiny and showColor,                                          char = 'C', location = location.belowbar, color = markerColor, size = size.tiny,   title = "Color Change (tiny)",   offset = -1, force_overlay = true)
+plotchar(not useTiny and not useNormal and not useLarge and not useHuge and showColor, char = 'C', location = location.belowbar, color = markerColor, size = size.small,  title = "Color Change (small)",  offset = -1, force_overlay = true)
+plotchar(useNormal and showColor,                                        char = 'C', location = location.belowbar, color = markerColor, size = size.normal, title = "Color Change (normal)", offset = -1, force_overlay = true)
+plotchar(useLarge and showColor,                                         char = 'C', location = location.belowbar, color = markerColor, size = size.large,  title = "Color Change (large)",  offset = -1, force_overlay = true)
+plotchar(useHuge and showColor,                                          char = 'C', location = location.belowbar, color = markerColor, size = size.huge,   title = "Color Change (huge)",   offset = -1, force_overlay = true)
 
 // --- Vertical Lines: C+21 / C+34 ---
-var int  lastCBar  = na
-var bool cPending  = false
-var line vline21   = na
-var line vline34   = na
-var bool linesLive = false
+var int   lastCBar      = na
+var bool  cPending      = false
+var float lastAoAtC     = na
+var line vline21       = na
+var line vline34       = na
+var bool linesLive        = false
+var int  liveZoneStart    = na
+var int  liveZoneEnd      = na
+var bool preZoneProtected = false
 
 var array<int> zoneStarts = array.new<int>()
 var array<int> zoneEnds   = array.new<int>()
@@ -104,33 +136,53 @@ if zoneCnt > 0
         if signalBar >= array.get(zoneStarts, i) and signalBar <= array.get(zoneEnds, i)
             inZone := true
 
-if not inZone
-    if colorChange and not zeroCross
-        lastCBar := bar_index - 1
-        cPending := true
+// Phase 1: manage live lines
+if linesLive
+    if signalBar > liveZoneEnd
         linesLive := false
-    else if zeroCross and cPending
-        cPending := false
-        newStart = lastCBar + 21
-        newEnd   = lastCBar + 34
-        overlap  = false
-        if zoneCnt > 0
-            for i = 0 to zoneCnt - 1
-                if newStart <= array.get(zoneEnds, i) and newEnd >= array.get(zoneStarts, i)
-                    overlap := true
-        if showVLines and not overlap
-            vline21 := line.new(x1 = newStart, y1 = low, x2 = newStart, y2 = high,
-                         extend = extend.both, color = vline21Color, style = lineStyle)
-            vline34 := line.new(x1 = newEnd, y1 = low, x2 = newEnd, y2 = high,
-                         extend = extend.both, color = vline34Color, style = lineStyle)
-            array.push(zoneStarts, newStart)
-            array.push(zoneEnds, newEnd)
-            linesLive := true
-    else if zeroCross and linesLive
+    else if zeroCross and signalBar >= liveZoneStart and signalBar <= liveZoneEnd
         line.delete(vline21)
         line.delete(vline34)
         array.pop(zoneStarts)
         array.pop(zoneEnds)
         linesLive := false
+    else if zeroCross and signalBar < liveZoneStart and not preZoneProtected
+        line.delete(vline21)
+        line.delete(vline34)
+        array.pop(zoneStarts)
+        array.pop(zoneEnds)
+        linesLive := false
+    else if colorChange and signalBar < liveZoneStart
+        preZoneProtected := true
+
+// Phase 2: new pair logic (only outside zones)
+if not inZone
+    if colorChange and not zeroCross
+        lastCBar  := bar_index - 1
+        cPending  := true
+        lastAoAtC := ao[1]
+    else if zeroCross and cPending
+        cPending := false
+        if not linesLive
+            newStart = lastCBar + 21
+            newEnd   = lastCBar + 34
+            zeroInOwnZone = signalBar >= newStart and signalBar <= newEnd
+            overlap  = false
+            if zoneCnt > 0
+                for i = 0 to zoneCnt - 1
+                    if newStart <= array.get(zoneEnds, i) and newEnd >= array.get(zoneStarts, i)
+                        overlap := true
+            if showVLines and not overlap and not zeroInOwnZone
+                vlineColor = lastAoAtC > 0 ? vlineBullColor : vlineBearColor
+                vline21 := line.new(x1 = newStart, y1 = low, x2 = newStart, y2 = high,
+                             extend = extend.both, color = vlineColor, style = lineStyle, force_overlay = true)
+                vline34 := line.new(x1 = newEnd, y1 = low, x2 = newEnd, y2 = high,
+                             extend = extend.both, color = vlineColor, style = lineStyle, force_overlay = true)
+                array.push(zoneStarts, newStart)
+                array.push(zoneEnds, newEnd)
+                liveZoneStart    := newStart
+                liveZoneEnd      := newEnd
+                linesLive        := true
+                preZoneProtected := false
     else if colorChange
         cPending := false
