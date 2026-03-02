@@ -35,6 +35,9 @@ tf3       = input.timeframe("D", "TF3 Timeframe", group = "Multi-TF Alerts")
 tf4Enable = input.bool(false, "TF4 Enable", group = "Multi-TF Alerts")
 tf4       = input.timeframe("W", "TF4 Timeframe", group = "Multi-TF Alerts")
 
+webhookSecret = input.string("", "Webhook Secret", group = "Webhook",
+     tooltip = "Optional secret token validated by the notifier webhook server")
+
 lineStyle = switch vlineStyleIn
     "solid"  => line.style_solid
     "dashed" => line.style_dashed
@@ -343,90 +346,99 @@ anySingleBarUp   = singleBarUp  or (tf1Enable and tf1SBU) or (tf2Enable and tf2S
 alertcondition(anySingleBarDown, title = "AO Single Bar Down (Multi-TF)", message = "AO single bar bearish pattern on one or more timeframes")
 alertcondition(anySingleBarUp,   title = "AO Single Bar Up (Multi-TF)",   message = "AO single bar bullish pattern on one or more timeframes")
 
-// --- Per-TF alert() with dynamic messages ---
+// --- Webhook JSON alert helper ---
 chartTf = timeframe.period
 
+buildAlertJson(string signalName, string tf) =>
+    '{"source":"tradingview","indicator":"AO Cross","signal":"' + signalName +
+     '","symbol":"' + syminfo.ticker +
+     '","exchange":"' + syminfo.prefix +
+     '","timeframe":"' + tf +
+     '","price":' + str.tostring(close) +
+     ',"secret":"' + webhookSecret + '"}'
+
+// --- Per-TF alert() with JSON payload ---
 if saucerBuy
-    alert("AO Saucer BUY on " + chartTf, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("saucer_buy", chartTf), alert.freq_once_per_bar_close)
 if saucerSell
-    alert("AO Saucer SELL on " + chartTf, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("saucer_sell", chartTf), alert.freq_once_per_bar_close)
 if wmaCrossUp
-    alert("AO crossed ABOVE WMA on " + chartTf, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("wma_cross_up", chartTf), alert.freq_once_per_bar_close)
 if wmaCrossDown
-    alert("AO crossed BELOW WMA on " + chartTf, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("wma_cross_down", chartTf), alert.freq_once_per_bar_close)
 if newHigherPeak
-    alert("AO higher peak on " + chartTf, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("higher_peak", chartTf), alert.freq_once_per_bar_close)
 if newLowerPeak
-    alert("AO lower peak on " + chartTf, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("lower_peak", chartTf), alert.freq_once_per_bar_close)
 if singleBarDown
-    alert("AO single bar DOWN on " + chartTf, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("single_bar_down", chartTf), alert.freq_once_per_bar_close)
 if singleBarUp
-    alert("AO single bar UP on " + chartTf, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("single_bar_up", chartTf), alert.freq_once_per_bar_close)
 
 if tf1Enable and tf1SB
-    alert("AO Saucer BUY on " + tf1, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("saucer_buy", tf1), alert.freq_once_per_bar_close)
 if tf1Enable and tf1SS
-    alert("AO Saucer SELL on " + tf1, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("saucer_sell", tf1), alert.freq_once_per_bar_close)
 if tf1Enable and tf1WCU
-    alert("AO crossed ABOVE WMA on " + tf1, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("wma_cross_up", tf1), alert.freq_once_per_bar_close)
 if tf1Enable and tf1WCD
-    alert("AO crossed BELOW WMA on " + tf1, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("wma_cross_down", tf1), alert.freq_once_per_bar_close)
 if tf1Enable and tf1HP
-    alert("AO higher peak on " + tf1, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("higher_peak", tf1), alert.freq_once_per_bar_close)
 if tf1Enable and tf1LP
-    alert("AO lower peak on " + tf1, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("lower_peak", tf1), alert.freq_once_per_bar_close)
 if tf1Enable and tf1SBD
-    alert("AO single bar DOWN on " + tf1, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("single_bar_down", tf1), alert.freq_once_per_bar_close)
 if tf1Enable and tf1SBU
-    alert("AO single bar UP on " + tf1, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("single_bar_up", tf1), alert.freq_once_per_bar_close)
 
 if tf2Enable and tf2SB
-    alert("AO Saucer BUY on " + tf2, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("saucer_buy", tf2), alert.freq_once_per_bar_close)
 if tf2Enable and tf2SS
-    alert("AO Saucer SELL on " + tf2, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("saucer_sell", tf2), alert.freq_once_per_bar_close)
 if tf2Enable and tf2WCU
-    alert("AO crossed ABOVE WMA on " + tf2, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("wma_cross_up", tf2), alert.freq_once_per_bar_close)
 if tf2Enable and tf2WCD
-    alert("AO crossed BELOW WMA on " + tf2, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("wma_cross_down", tf2), alert.freq_once_per_bar_close)
 if tf2Enable and tf2HP
-    alert("AO higher peak on " + tf2, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("higher_peak", tf2), alert.freq_once_per_bar_close)
 if tf2Enable and tf2LP
-    alert("AO lower peak on " + tf2, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("lower_peak", tf2), alert.freq_once_per_bar_close)
 if tf2Enable and tf2SBD
-    alert("AO single bar DOWN on " + tf2, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("single_bar_down", tf2), alert.freq_once_per_bar_close)
 if tf2Enable and tf2SBU
-    alert("AO single bar UP on " + tf2, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("single_bar_up", tf2), alert.freq_once_per_bar_close)
 
 if tf3Enable and tf3SB
-    alert("AO Saucer BUY on " + tf3, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("saucer_buy", tf3), alert.freq_once_per_bar_close)
 if tf3Enable and tf3SS
-    alert("AO Saucer SELL on " + tf3, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("saucer_sell", tf3), alert.freq_once_per_bar_close)
 if tf3Enable and tf3WCU
-    alert("AO crossed ABOVE WMA on " + tf3, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("wma_cross_up", tf3), alert.freq_once_per_bar_close)
 if tf3Enable and tf3WCD
-    alert("AO crossed BELOW WMA on " + tf3, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("wma_cross_down", tf3), alert.freq_once_per_bar_close)
 if tf3Enable and tf3HP
-    alert("AO higher peak on " + tf3, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("higher_peak", tf3), alert.freq_once_per_bar_close)
 if tf3Enable and tf3LP
-    alert("AO lower peak on " + tf3, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("lower_peak", tf3), alert.freq_once_per_bar_close)
 if tf3Enable and tf3SBD
-    alert("AO single bar DOWN on " + tf3, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("single_bar_down", tf3), alert.freq_once_per_bar_close)
 if tf3Enable and tf3SBU
-    alert("AO single bar UP on " + tf3, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("single_bar_up", tf3), alert.freq_once_per_bar_close)
 
 if tf4Enable and tf4SB
-    alert("AO Saucer BUY on " + tf4, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("saucer_buy", tf4), alert.freq_once_per_bar_close)
 if tf4Enable and tf4SS
-    alert("AO Saucer SELL on " + tf4, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("saucer_sell", tf4), alert.freq_once_per_bar_close)
 if tf4Enable and tf4WCU
-    alert("AO crossed ABOVE WMA on " + tf4, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("wma_cross_up", tf4), alert.freq_once_per_bar_close)
 if tf4Enable and tf4WCD
-    alert("AO crossed BELOW WMA on " + tf4, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("wma_cross_down", tf4), alert.freq_once_per_bar_close)
 if tf4Enable and tf4HP
-    alert("AO higher peak on " + tf4, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("higher_peak", tf4), alert.freq_once_per_bar_close)
 if tf4Enable and tf4LP
-    alert("AO lower peak on " + tf4, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("lower_peak", tf4), alert.freq_once_per_bar_close)
 if tf4Enable and tf4SBD
-    alert("AO single bar DOWN on " + tf4, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("single_bar_down", tf4), alert.freq_once_per_bar_close)
 if tf4Enable and tf4SBU
-    alert("AO single bar UP on " + tf4, alert.freq_once_per_bar_close)
+    alert(buildAlertJson("single_bar_up", tf4), alert.freq_once_per_bar_close)
