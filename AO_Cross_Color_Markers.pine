@@ -346,7 +346,7 @@ anySingleBarUp   = singleBarUp  or (tf1Enable and tf1SBU) or (tf2Enable and tf2S
 alertcondition(anySingleBarDown, title = "AO Single Bar Down (Multi-TF)", message = "AO single bar bearish pattern on one or more timeframes")
 alertcondition(anySingleBarUp,   title = "AO Single Bar Up (Multi-TF)",   message = "AO single bar bullish pattern on one or more timeframes")
 
-// --- Webhook JSON alert helper ---
+// --- Human-readable alert helper ---
 chartTf = timeframe.period
 
 tfLabel(string tf) =>
@@ -367,14 +367,19 @@ tfLabel(string tf) =>
         => tf + "m"
 
 buildAlertJson(string signalName, string tf) =>
-    '{"source":"tradingview","indicator":"AO Cross","signal":"' + signalName +
-     '","symbol":"' + syminfo.ticker +
-     '","exchange":"' + syminfo.prefix +
-     '","timeframe":"' + tfLabel(tf) +
-     '","price":' + str.tostring(close) +
-     ',"secret":"' + webhookSecret + '"}'
+    sigLabel = switch signalName
+        "saucer_buy"      => "Saucer BUY"
+        "saucer_sell"     => "Saucer SELL"
+        "wma_cross_up"    => "WMA Cross UP"
+        "wma_cross_down"  => "WMA Cross DOWN"
+        "higher_peak"     => "Higher Peak"
+        "lower_peak"      => "Lower Peak"
+        "single_bar_down" => "Single Bar DOWN"
+        "single_bar_up"   => "Single Bar UP"
+        => signalName
+    str.format("AO Cross | Signal: {0} | Symbol: {1} | TF: {2} | Price: {3}", sigLabel, syminfo.ticker, tfLabel(tf), str.tostring(close))
 
-// --- Per-TF alert() with JSON payload ---
+// --- Per-TF alert() with human-readable payload ---
 if saucerBuy
     alert(buildAlertJson("saucer_buy", chartTf), alert.freq_once_per_bar_close)
 if saucerSell
